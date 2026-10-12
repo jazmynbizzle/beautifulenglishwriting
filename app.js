@@ -204,10 +204,12 @@ async function getOcrWorker() {
   return ocrWorkerPromise;
 }
 
-async function recogniseText(img) {
+async function recogniseText(file) {
   try {
     const worker = await getOcrWorker();
-    const result = await worker.recognize(img);
+    // Pass the File itself. An Image element's temporary blob URL may already
+    // have been revoked by the time the OCR model finishes loading.
+    const result = await worker.recognize(file);
     const text = (result.data.text || '').replace(/\s+/g, ' ').trim();
     const confidence = Number(result.data.confidence || 0);
     const letters = (text.match(/[A-Za-z]/g) || []).length;
@@ -216,7 +218,7 @@ async function recogniseText(img) {
     console.error('OCR failed:', error);
     if ('TextDetector' in window) {
       try {
-        const bitmap = await createImageBitmap(img);
+        const bitmap = await createImageBitmap(file);
         const detector = new window.TextDetector();
         const blocks = await detector.detect(bitmap);
         bitmap.close();
@@ -419,8 +421,7 @@ async function runAnalysis() {
   analyseButton.classList.add('loading');
   analyseButton.querySelector('span:first-child').textContent = '正在分析笔迹';
   try {
-    const img = await imageFromFile(currentFile);
-    const ocr = await recogniseText(img);
+    const ocr = await recogniseText(currentFile);
     if (!ocr.available) {
       photoStatus.textContent = '英文识别模块暂时无法运行，本次没有评分。请检查网络或稍后刷新重试。';
       photoStatus.className = 'photo-status warn';
