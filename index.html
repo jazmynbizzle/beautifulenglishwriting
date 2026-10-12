@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#18324a" />
+    <meta name="description" content="免登录的英语书写智能初评工具。教师拍摄学生练习页，查看分数、是否通过和具体修改建议。" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>字迹小教练｜英语书写智能评价</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="字迹小教练首页">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span><b>字迹小教练</b><small>Beautiful English · 智能初评</small></span>
+      </a>
+      <span class="privacy-pill"><span aria-hidden="true">●</span> 免登录 · 照片不留存</span>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-copy">
+          <p class="eyebrow">给教师的英语书写即时反馈</p>
+          <h1 id="page-title">拍一张，就知道<br /><em>下一笔该怎么改。</em></h1>
+          <p class="intro">学生写完后把练习页交给老师；老师拍照评价。通过就完成，未通过就按建议再练、再拍。不用选年级或输入原文，白纸、横线纸和四线三格都可以。</p>
+          <div class="rubric-strip" aria-label="评价标准">
+            <span><b>01</b> 看得清</span><span><b>02</b> 分得开</span><span><b>03</b> 排得稳</span><span><b>04</b> 写得净</span>
+          </div>
+        </div>
+
+        <section class="capture-card" aria-labelledby="capture-title">
+          <div class="card-kicker"><span>STEP 1 · 老师拍照</span><span>无需计时</span></div>
+          <h2 id="capture-title">写完交给老师，拍照初评</h2>
+          <p class="pass-rules"><b>通过条件</b> 照片清晰、英文内容能被稳定识别；综合分达到 80，且“看得清”“分得开”各达到 70。未通过就再练、再评。</p>
+          <p class="direct-note"><b>拍照看反馈</b><span>不限制年级和书写内容。照片应包含至少几行英文，系统才有足够字迹判断。</span></p>
+
+          <label class="upload-zone" id="upload-zone" for="photo">
+            <input id="photo" type="file" accept="image/*" capture="environment" />
+            <span class="camera-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48" role="img"><path d="M15.5 13.5 19 9h10l3.5 4.5H38a4 4 0 0 1 4 4V35a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V17.5a4 4 0 0 1 4-4h5.5Z"/><circle cx="24" cy="26" r="8"/></svg>
+            </span>
+            <b id="upload-title">拍照或从相册选择</b>
+            <span id="upload-help">镜头与纸面平行，把完整单词或句子拍清楚</span>
+          </label>
+
+          <div id="preview-wrap" class="preview-wrap" hidden>
+            <img id="preview" alt="已选择的练字照片预览" />
+            <button id="replace" class="text-button" type="button">换一张</button>
+          </div>
+          <p id="photo-status" class="photo-status" aria-live="polite"></p>
+          <button id="analyse" class="primary-button" type="button" onclick="runAnalysis()" disabled>
+            <span>开始智能评价</span><span aria-hidden="true">→</span>
+          </button>
+          <p class="privacy-note">照片只在当前设备中分析，不上传或留存。自动评价只作练习反馈，教师保留最终判断。</p>
+        </section>
+      </section>
+
+      <section class="guide" aria-labelledby="guide-title">
+        <div>
+          <p class="eyebrow">拍得准，评得才准</p>
+          <h2 id="guide-title">一张合格照片的三个条件</h2>
+        </div>
+        <ol>
+          <li><b>正</b><span>手机与纸面平行，不要斜拍</span></li>
+          <li><b>全</b><span>完整单词或句子不要被裁掉</span></li>
+          <li><b>亮</b><span>避开阴影、反光与模糊</span></li>
+        </ol>
+      </section>
+
+      <section id="results" class="results" aria-labelledby="result-title" hidden>
+        <div class="results-heading">
+          <div>
+            <p class="eyebrow">本次书写报告</p>
+            <h2 id="result-title">正在读取笔迹…</h2>
+          </div>
+          <div class="overall"><strong id="overall-score">--</strong><span>/ 100</span></div>
+        </div>
+
+        <section id="completion-panel" class="completion-panel" aria-live="polite">
+          <span id="completion-badge" class="completion-badge">待评价</span>
+          <div><h3 id="completion-title">等待书写评价</h3><p id="completion-detail">老师拍摄学生作品后查看结果。</p></div>
+        </section>
+
+        <div id="quality-alert" class="quality-alert" hidden></div>
+        <div class="score-grid" id="score-grid"></div>
+
+        <div class="feedback-grid">
+          <article class="feedback-card priority-card">
+            <p class="card-label">本次只改这一点</p>
+            <h3 id="priority-title">—</h3>
+            <p id="priority-text">—</p>
+            <div class="mini-grid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          </article>
+          <article class="feedback-card">
+            <p class="card-label">照片中的证据</p>
+            <ul id="evidence-list" class="evidence-list"></ul>
+          </article>
+          <article class="feedback-card drill-card">
+            <p class="card-label">下一次的 10 分钟练法</p>
+            <ol id="drill-list"></ol>
+          </article>
+          <article class="feedback-card marker-card">
+            <p class="card-label">阅卷老师视角</p>
+            <div class="marker-view">
+              <section class="marker-note marker-like">
+                <span>老师会喜欢</span>
+                <p id="marker-like">—</p>
+              </section>
+              <section class="marker-note marker-concern">
+                <span>老师会担心</span>
+                <p id="marker-concern">—</p>
+              </section>
+            </div>
+            <blockquote id="teacher-comment">—</blockquote>
+            <button id="copy-comment" type="button" class="secondary-button">复制评语</button>
+          </article>
+        </div>
+        <div class="result-actions">
+          <button id="retry" type="button" class="primary-button light"><span>重新拍照评价</span><span aria-hidden="true">↻</span></button>
+          <p>未通过：请学生照着建议再练，写完后老师重拍复评。通过：本次练习完成。</p>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Beautiful English · 英语书写练习</span><span>拍照评价版</span></footer>
+    <canvas id="analysis-canvas" hidden></canvas>
+    <script src="./vendor/tesseract.min.js" defer></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

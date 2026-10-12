@@ -1,0 +1,10 @@
+{
+  "name": "字迹小教练｜英语书写智能评价",
+  "short_name": "字迹小教练",
+  "description": "免登录的英语书写拍照初评工具",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f5f1e8",
+  "theme_color": "#18324a",
+  "icons": [{ "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
