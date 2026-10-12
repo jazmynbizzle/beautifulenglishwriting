@@ -11,7 +11,7 @@ let quickMetrics = null;
 let ocrWorkerPromise = null;
 
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
-const scoreWord = (score) => score >= 86 ? '很好' : score >= 72 ? '基本达标' : score >= 60 ? '接近达标' : '需要练习';
+const scoreWord = (score) => score >= 86 ? '很好' : score >= 70 ? '基本达标' : score >= 58 ? '接近达标' : '需要练习';
 const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
 
 async function imageFromFile(file) {
@@ -162,23 +162,41 @@ function analysePixels(img) {
 async function getOcrWorker() {
   if (!window.Tesseract?.createWorker) throw new Error('ocr-library-unavailable');
   if (!ocrWorkerPromise) {
-    ocrWorkerPromise = window.Tesseract.createWorker('eng', 1, {
-      workerPath: new URL('./vendor/worker.min.js', document.baseURI).href,
-      corePath: new URL('./vendor', document.baseURI).href,
-      langPath: new URL('./vendor', document.baseURI).href,
-      logger: message => {
-        if (!analyseButton.classList.contains('loading')) return;
-        const progress = Math.round((message.progress || 0) * 100);
-        if (message.status === 'loading language traineddata') photoStatus.textContent = `首次加载英文识别模块… ${progress}%`;
-        if (message.status === 'recognizing text') photoStatus.textContent = `正在辨认学生字迹… ${progress}%`;
+    // GitHub Pages is sometimes very slow for multi-megabyte OCR assets. Use
+    // jsDelivr's mirror of this same public repository, then the known-working
+    // Netlify copy if the CDN cannot load on a particular school network.
+    const mirrors = [
+      'https://cdn.jsdelivr.net/gh/jazmynbizzle/beautifulenglishwriting@main/vendor',
+      'https://beautifulenglishwriting.netlify.app/vendor'
+    ];
+    ocrWorkerPromise = (async () => {
+      let lastError;
+      for (const mirror of mirrors) {
+        try {
+          const worker = await window.Tesseract.createWorker('eng', 1, {
+            workerPath: new URL('./vendor/worker.min.js', document.baseURI).href,
+            corePath: mirror,
+            langPath: mirror,
+            logger: message => {
+              if (!analyseButton.classList.contains('loading')) return;
+              const progress = Math.round((message.progress || 0) * 100);
+              if (message.status === 'loading language traineddata') photoStatus.textContent = `首次加载英文识别模块… ${progress}%`;
+              if (message.status === 'recognizing text') photoStatus.textContent = `正在辨认学生字迹… ${progress}%`;
+            }
+          });
+          await worker.setParameters({
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?'- ",
+            preserve_interword_spaces: '1'
+          });
+          return worker;
+        } catch (error) {
+          lastError = error;
+          console.warn('OCR mirror unavailable:', mirror, error);
+          photoStatus.textContent = '正在尝试备用识别线路…';
+        }
       }
-    }).then(async worker => {
-      await worker.setParameters({
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,!?'- ",
-        preserve_interword_spaces: '1'
-      });
-      return worker;
-    }).catch(error => {
+      throw lastError;
+    })().catch(error => {
       ocrWorkerPromise = null;
       throw error;
     });
@@ -193,8 +211,9 @@ async function recogniseText(img) {
     const text = (result.data.text || '').replace(/\s+/g, ' ').trim();
     const confidence = Number(result.data.confidence || 0);
     const letters = (text.match(/[A-Za-z]/g) || []).length;
-    return { available: true, text, confidence, letters, recognised: letters >= 2 && confidence >= 32 };
-  } catch {
+    return { available: true, text, confidence, letters, recognised: letters >= 3 && confidence >= 20 };
+  } catch (error) {
+    console.error('OCR failed:', error);
     if ('TextDetector' in window) {
       try {
         const bitmap = await createImageBitmap(img);
@@ -212,9 +231,9 @@ async function recogniseText(img) {
 
 function photoMessage(m) {
   const problems = [];
-  if (m.mean < 125) problems.push('光线偏暗');
-  if (m.mean > 247) problems.push('画面过曝');
-  if (m.sharpnessScore < 45) problems.push('照片可能模糊');
+  if (m.mean < 105) problems.push('光线偏暗');
+  if (m.mean > 250) problems.push('画面过曝');
+  if (m.sharpnessScore < 30) problems.push('照片可能模糊');
   if (m.groups.length && m.tilt > 4) problems.push('纸面有些倾斜');
   return problems;
 }
@@ -264,8 +283,8 @@ uploadZone.addEventListener('drop', e => handlePhoto(e.dataTransfer.files?.[0]))
 function buildScores(metrics, ocr) {
   const quality = (metrics.brightnessScore + metrics.sharpnessScore + metrics.contrastScore) / 3;
   const visualClarity = clamp(metrics.sharpnessScore * .38 + metrics.contrastScore * .30 + metrics.inkScore * .18 + metrics.brightnessScore * .14);
-  const ocrClarity = ocr.available ? clamp((ocr.confidence - 15) * 1.18 + Math.min(ocr.letters, 18) * 1.25) : visualClarity;
-  let clarity = ocr.available ? clamp(visualClarity * .38 + ocrClarity * .62) : visualClarity;
+  const ocrClarity = ocr.available ? clamp(50 + (ocr.confidence - 30) * .65 + Math.min(ocr.letters, 14) * .8) : visualClarity;
+  let clarity = ocr.available ? clamp(visualClarity * .45 + ocrClarity * .55) : visualClarity;
   if (!ocr.recognised) clarity = Math.min(clarity, 38);
   const gridAngleScore = metrics.groups.length ? 100 - Math.min(metrics.tilt, 10) * 8 : metrics.layoutScore;
   const stability = clamp(metrics.layoutScore * .48 + gridAngleScore * .16 + metrics.inkScore * .18 + clarity * .18);
@@ -323,7 +342,7 @@ function renderResults(scores, metrics, ocr) {
   const rounded = Object.fromEntries(keys.map(k => [k, Math.round(scores[k])]));
   let overall = Math.round(rounded.clarity * .30 + rounded.accuracy * .27 + rounded.stability * .24 + rounded.completeness * .19);
   if (!ocr.recognised) overall = Math.min(overall, 59);
-  const verdict = !ocr.recognised ? '字迹暂时难以辨认，先把字写清楚' : overall >= 86 ? '书写规范，继续保持' : overall >= 72 ? '基本达标，再改一处就更好' : overall >= 60 ? '接近达标，先集中改一项' : '需要再练，但方向很明确';
+  const verdict = !ocr.recognised ? '字迹暂时难以辨认，先把字写清楚' : overall >= 86 ? '书写规范，继续保持' : overall >= 70 ? '基本达标，再改一处就更好' : overall >= 58 ? '接近达标，先集中改一项' : '需要再练，但方向很明确';
   $('#result-title').textContent = verdict;
   $('#overall-score').textContent = overall;
   photoStatus.textContent = ocr.available
@@ -338,9 +357,8 @@ function renderResults(scores, metrics, ocr) {
       <div class="score-track"><i style="width:${rounded[k]}%"></i></div>
     </article>`).join('');
 
-  const photoUsable = metrics.mean >= 125 && metrics.mean <= 247 && metrics.sharpnessScore >= 45;
-  const enoughWriting = ocr.letters >= 12;
-  const writingPassed = photoUsable && ocr.recognised && ocr.confidence >= 45 && enoughWriting && overall >= 80 && rounded.clarity >= 70 && rounded.accuracy >= 70;
+  const photoUsable = metrics.mean >= 105 && metrics.mean <= 250 && metrics.sharpnessScore >= 30;
+  const writingPassed = photoUsable && ocr.recognised && ocr.confidence >= 25 && overall >= 70 && rounded.clarity >= 60;
   const passed = writingPassed;
   const panel = $('#completion-panel');
   panel.classList.toggle('passed', passed);
@@ -349,10 +367,9 @@ function renderResults(scores, metrics, ocr) {
   const reasons = [];
   if (!photoUsable) reasons.push('照片过暗、过曝或模糊，请重拍');
   if (!ocr.recognised) reasons.push('英文内容暂时难以辨认');
-  else if (!enoughWriting) reasons.push('可辨认内容太少，请拍入更多已练习的英文');
-  else if (ocr.confidence < 45) reasons.push('部分字母仍需猜读');
-  if (overall < 80) reasons.push(`综合分还需达到 80 分（目前 ${overall} 分）`);
-  if (rounded.clarity < 70 || rounded.accuracy < 70) reasons.push('“看得清”和“分得开”均需达到 70 分');
+  else if (ocr.confidence < 25) reasons.push('部分字母仍需猜读');
+  if (overall < 70) reasons.push(`综合分还需达到 70 分（目前 ${overall} 分）`);
+  if (rounded.clarity < 60) reasons.push('“看得清”还需达到 60 分');
   $('#completion-detail').textContent = passed
     ? `综合 ${overall} 分，本次练习可以结束。教师请结合学生的纸质作品确认。`
     : !photoUsable
