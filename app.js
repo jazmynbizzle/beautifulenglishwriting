@@ -318,17 +318,17 @@ const rubric = {
 };
 
 const drills = {
-  clarity: ['圈出最难认的 3 个字母', '每个字母慢写 5 次，让每一笔都分开', '重写原句 1 遍，写完请同桌直接读'],
+  clarity: ['圈出最难认的 3 个字母', '每个字母慢写 5 次，把形状写清楚', '重写原句 1 遍，写完请同桌直接读'],
   accuracy: ['找出最容易混淆的 2 组字母，如 a/o、m/n 或 r/v', '每组对比写 5 次，让它们明显不一样', '回到原句重写一次，只检查这些字母'],
   stability: ['先定好一个小写字母的大小', '同一个词连续写 4 次，大小和倾斜保持一致', '再写 1 句，让每个词之间留出约一个字母的空隙'],
-  completeness: ['圈出粘连、涂改或特别拥挤的地方', '把这些地方重新写一遍，笔画不要来回描粗', '最后抄写 1 句，写完等 3 秒再检查整洁度']
+  completeness: ['看一眼纸面，圈出不够整洁的地方', '把这些地方清楚地重写一遍', '最后抄写 1 句，写完等 3 秒再检查整洁度']
 };
 
 function priorityCopy(key) {
-  if (key === 'clarity') return ['让每个字母一眼可认', '下一遍先慢一点，把粘在一起的笔画分开。写完后，如果同桌不用猜就能读出来，这一项就改对了。'];
+  if (key === 'clarity') return ['让每个字母一眼可认', '下一遍先慢一点，把不清楚的字母形状写明确。写完后，如果同桌不用猜就能读出来，这一项就改对了。'];
   if (key === 'accuracy') return ['把相似字母写出区别', '重点看 a/o、m/n、r/v、u/v 等容易混淆的字母。每一对都要让别人一眼看出不同。'];
   if (key === 'stability') return ['让大小和词距保持一样', '下一遍先定好字母大小，整行不要越写越大；两个单词之间留出约一个小写字母的空隙。'];
-  return ['让页面更干净', '不要来回描粗，也不要把字母挤在一起。写错时轻轻划掉一次，再清楚地重写。'];
+  return ['让页面更整洁', '看一眼纸面有没有需要修改的地方；若写错，轻轻划掉一次再清楚地重写。'];
 }
 
 const markerLikes = {
@@ -340,9 +340,9 @@ const markerLikes = {
 
 const markerConcerns = {
   clarity: '部分字母需要猜，可能让正确答案看起来像拼写错误。',
-  accuracy: '相似字母或相邻笔画容易混在一起，阅卷时可能读错。',
+  accuracy: '字形还不够端正，阅卷时可能需要多看一眼。',
   stability: '大小、倾斜或词距变化较大，长句不容易快速扫读。',
-  completeness: '描粗、粘连或拥挤感较明显，会影响答案的整洁度。'
+  completeness: '照片中笔迹密度不均；请老师看纸面确认是否影响阅读。'
 };
 
 function renderResults(scores, metrics, ocr, form = null, scroll = true) {
@@ -350,6 +350,8 @@ function renderResults(scores, metrics, ocr, form = null, scroll = true) {
   const rounded = Object.fromEntries(keys.map(k => [k, scores[k] === null ? null : Math.round(scores[k])]));
   let overall = form ? Math.round(rounded.clarity * .30 + rounded.accuracy * .27 + rounded.stability * .24 + rounded.completeness * .19) : null;
   if (overall !== null && !ocr.recognised) overall = Math.min(overall, 59);
+  if (form === 'uneven') overall = Math.min(overall, 68);
+  if (form === 'joined') overall = Math.min(overall, 58);
   const verdict = !ocr.recognised ? '英文暂时难以辨认，先检查照片和字迹' : !form ? '文字已识别，请老师确认字形' : form === 'uneven' ? '字母分开了，下一步练字形端正' : form === 'joined' ? '有粘连，下一步练清楚分字母' : overall >= 70 ? '书写基本达标，继续保持' : '再练一遍，重点写清楚';
   $('#result-title').textContent = verdict;
   $('#overall-score').textContent = overall ?? '—';
