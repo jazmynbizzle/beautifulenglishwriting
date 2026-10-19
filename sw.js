@@ -1,4 +1,4 @@
-const CACHE = 'beautiful-english-writing-v8';
+const CACHE = 'beautiful-english-writing-v9';
 const ASSETS = ['./', './styles.css', './app.js', './favicon.svg', './manifest.webmanifest', './vendor/tesseract.min.js', './vendor/worker.min.js'].map(path => new URL(path, self.registration.scope).href);
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))));

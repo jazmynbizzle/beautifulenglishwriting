@@ -26,14 +26,14 @@
           <h1 id="page-title">拍一张，就知道<br /><em>下一笔该怎么改。</em></h1>
           <p class="intro">学生写完后把练习页交给老师；老师拍照评价。通过就完成，未通过就按建议再练、再拍。不用选年级或输入原文，白纸、横线纸和四线三格都可以。</p>
           <div class="rubric-strip" aria-label="评价标准">
-            <span><b>01</b> 看得清</span><span><b>02</b> 分得开</span><span><b>03</b> 排得稳</span><span><b>04</b> 写得净</span>
+            <span><b>01</b> 看得清</span><span><b>02</b> 字形端正</span><span><b>03</b> 排得稳</span><span><b>04</b> 写得净</span>
           </div>
         </div>
 
         <section class="capture-card" aria-labelledby="capture-title">
           <div class="card-kicker"><span>STEP 1 · 老师拍照</span><span>无需计时</span></div>
           <h2 id="capture-title">写完交给老师，拍照初评</h2>
-          <p class="pass-rules"><b>通过条件</b> 照片可用于评价、英文基本可辨；综合分达到 70，且“看得清”达到 60。未通过就再练、再评。</p>
+          <p class="pass-rules"><b>通过条件</b> 英文基本可辨，老师确认字形基本端正；综合分达到 70，且“看得清”达到 60。未通过就再练、再评。</p>
           <p class="direct-note"><b>拍照看反馈</b><span>不限制年级和书写内容。尽量拍入完整的单词或句子。</span></p>
 
           <label class="upload-zone" id="upload-zone" for="photo">
@@ -50,10 +50,17 @@
             <button id="replace" class="text-button" type="button">换一张</button>
           </div>
           <p id="photo-status" class="photo-status" aria-live="polite"></p>
+          <fieldset id="form-check" class="form-check" hidden>
+            <legend>老师看一眼字形（点选一项）</legend>
+            <p>电脑能辨认字母，不代表字写得端正。请按纸上的真实字形选，不必逐字批改。</p>
+            <label><input type="radio" name="letter-form" value="neat" /><span>字母分开，字形基本端正</span></label>
+            <label><input type="radio" name="letter-form" value="uneven" /><span>字母分开，但字形歪斜或大小不齐</span></label>
+            <label><input type="radio" name="letter-form" value="joined" /><span>确实有字母／笔画粘连，影响辨认</span></label>
+          </fieldset>
           <button id="analyse" class="primary-button" type="button" onclick="runAnalysis()" disabled>
             <span>开始智能评价</span><span aria-hidden="true">→</span>
           </button>
-          <p class="privacy-note">照片只在当前设备中分析，不上传或留存。自动评价只作练习反馈，教师保留最终判断。</p>
+          <p class="privacy-note">照片只在当前设备中分析，不上传或留存。字形工整不能仅凭文字识别准确判断，所以需老师点选一次。</p>
         </section>
       </section>
 

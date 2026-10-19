@@ -67,6 +67,12 @@ h1 em::after { content: ""; position: absolute; left: 0; right: 0; bottom: -7px;
 .photo-status { min-height: 20px; margin: 11px 0 0; font-size: 12px; color: var(--muted); }
 .photo-status.good { color: var(--good); }
 .photo-status.warn { color: var(--warn); }
+.form-check { margin: 14px 0 4px; padding: 14px; border: 1px solid var(--border); background: #f7faf9; }
+.form-check legend { padding: 0 5px; font-size: 13px; font-weight: 800; color: var(--ink); }
+.form-check p { margin: 0 0 10px; font-size: 12px; line-height: 1.55; color: var(--muted); }
+.form-check label { display: flex; gap: 9px; align-items: flex-start; padding: 9px 10px; margin-top: 6px; background: white; border: 1px solid var(--border); cursor: pointer; font-size: 12px; line-height: 1.45; }
+.form-check label:has(input:checked) { border-color: var(--coral); background: #fff5f1; }
+.form-check input { margin-top: 2px; accent-color: var(--coral); }
 .primary-button { width: 100%; border: 0; background: var(--coral); color: white; min-height: 54px; margin-top: 10px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font-weight: 800; cursor: pointer; transition: .2s ease; }
 .primary-button:hover:not(:disabled) { background: #ca4935; transform: translateY(-2px); }
 .primary-button:disabled { opacity: .42; cursor: not-allowed; }

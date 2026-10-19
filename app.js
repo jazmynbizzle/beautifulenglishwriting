@@ -9,6 +9,7 @@ let currentFile = null;
 let previewUrl = null;
 let quickMetrics = null;
 let ocrWorkerPromise = null;
+let lastOcr = null;
 
 const clamp = (n, min = 0, max = 100) => Math.max(min, Math.min(max, n));
 const scoreWord = (score) => score >= 86 ? '很好' : score >= 70 ? '基本达标' : score >= 58 ? '接近达标' : '需要练习';
@@ -252,6 +253,9 @@ async function handlePhoto(file) {
     return;
   }
   currentFile = file;
+  lastOcr = null;
+  document.querySelectorAll('input[name="letter-form"]').forEach(input => { input.checked = false; });
+  $('#form-check').hidden = false;
   $('#results').hidden = true;
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = URL.createObjectURL(file);
@@ -282,7 +286,7 @@ $('#replace').addEventListener('click', () => photoInput.click());
 ['dragleave', 'drop'].forEach(name => uploadZone.addEventListener(name, e => { e.preventDefault(); uploadZone.classList.remove('drag'); }));
 uploadZone.addEventListener('drop', e => handlePhoto(e.dataTransfer.files?.[0]));
 
-function buildScores(metrics, ocr) {
+function buildScores(metrics, ocr, form) {
   const quality = (metrics.brightnessScore + metrics.sharpnessScore + metrics.contrastScore) / 3;
   const visualClarity = clamp(metrics.sharpnessScore * .38 + metrics.contrastScore * .30 + metrics.inkScore * .18 + metrics.brightnessScore * .14);
   const ocrClarity = ocr.available ? clamp(50 + (ocr.confidence - 30) * .65 + Math.min(ocr.letters, 14) * .8) : visualClarity;
@@ -290,15 +294,17 @@ function buildScores(metrics, ocr) {
   if (!ocr.recognised) clarity = Math.min(clarity, 38);
   const gridAngleScore = metrics.groups.length ? 100 - Math.min(metrics.tilt, 10) * 8 : metrics.layoutScore;
   const stability = clamp(metrics.layoutScore * .48 + gridAngleScore * .16 + metrics.inkScore * .18 + clarity * .18);
-  let accuracy = clamp(clarity * .58 + metrics.contrastScore * .17 + metrics.inkScore * .13 + metrics.layoutScore * .12);
+  // OCR measures readability, not penmanship. Only the teacher's direct
+  // observation can determine whether separate letters are actually neat.
+  let accuracy = form === 'neat' ? 84 : form === 'uneven' ? 48 : form === 'joined' ? 34 : null;
   let completeness = clamp(metrics.inkScore * .32 + metrics.contrastScore * .27 + metrics.brightnessScore * .21 + metrics.sharpnessScore * .20);
   if (!ocr.recognised) {
-    accuracy = Math.min(accuracy, 55);
+    if (accuracy !== null) accuracy = Math.min(accuracy, 55);
   }
   if (quality < 48) {
     const penalty = (48 - quality) * .24;
     clarity = clamp(clarity - penalty);
-    accuracy = clamp(accuracy - penalty);
+    if (accuracy !== null) accuracy = clamp(accuracy - penalty);
     completeness = clamp(completeness - penalty);
   }
   return { clarity, accuracy, stability, completeness, quality };
@@ -306,9 +312,9 @@ function buildScores(metrics, ocr) {
 
 const rubric = {
   clarity: { name: '看得清', good: '大多数字母一眼就能认出', weak: '有些字母需要停下来猜' },
-  accuracy: { name: '分得开', good: '相似字母和相邻笔画容易区分', weak: '有些笔画粘在一起，字母容易看错' },
-  stability: { name: '排得稳', good: '字母大小、词距和书写方向较稳定', weak: '字母大小或词距忽大忽小' },
-  completeness: { name: '写得净', good: '笔画干净，页面看起来不拥挤', weak: '笔画、修改痕迹或拥挤感影响阅读' }
+  accuracy: { name: '字形端正', good: '老师确认字母形状基本端正', weak: '请老师看纸面确认字形' },
+  stability: { name: '排得稳', good: '照片中的书写排列相对稳定', weak: '排列或拍摄角度需要再检查' },
+  completeness: { name: '页面观感', good: '照片中的笔迹密度较合适', weak: '照片中的笔迹密度需再核对' }
 };
 
 const drills = {
@@ -339,14 +345,14 @@ const markerConcerns = {
   completeness: '描粗、粘连或拥挤感较明显，会影响答案的整洁度。'
 };
 
-function renderResults(scores, metrics, ocr) {
+function renderResults(scores, metrics, ocr, form = null, scroll = true) {
   const keys = ['clarity', 'accuracy', 'stability', 'completeness'];
-  const rounded = Object.fromEntries(keys.map(k => [k, Math.round(scores[k])]));
-  let overall = Math.round(rounded.clarity * .30 + rounded.accuracy * .27 + rounded.stability * .24 + rounded.completeness * .19);
-  if (!ocr.recognised) overall = Math.min(overall, 59);
-  const verdict = !ocr.recognised ? '字迹暂时难以辨认，先把字写清楚' : overall >= 86 ? '书写规范，继续保持' : overall >= 70 ? '基本达标，再改一处就更好' : overall >= 58 ? '接近达标，先集中改一项' : '需要再练，但方向很明确';
+  const rounded = Object.fromEntries(keys.map(k => [k, scores[k] === null ? null : Math.round(scores[k])]));
+  let overall = form ? Math.round(rounded.clarity * .30 + rounded.accuracy * .27 + rounded.stability * .24 + rounded.completeness * .19) : null;
+  if (overall !== null && !ocr.recognised) overall = Math.min(overall, 59);
+  const verdict = !ocr.recognised ? '英文暂时难以辨认，先检查照片和字迹' : !form ? '文字已识别，请老师确认字形' : form === 'uneven' ? '字母分开了，下一步练字形端正' : form === 'joined' ? '有粘连，下一步练清楚分字母' : overall >= 70 ? '书写基本达标，继续保持' : '再练一遍，重点写清楚';
   $('#result-title').textContent = verdict;
-  $('#overall-score').textContent = overall;
+  $('#overall-score').textContent = overall ?? '—';
   photoStatus.textContent = ocr.available
     ? (ocr.recognised ? `识别完成：读出约 ${ocr.letters} 个英文字母。` : '识别完成：没有稳定读出英文内容。')
     : '系统没有稳定读出英文内容，本次按“字迹不够清楚”处理。';
@@ -354,35 +360,44 @@ function renderResults(scores, metrics, ocr) {
 
   $('#score-grid').innerHTML = keys.map(k => `
     <article class="score-card">
-      <div class="score-card-top"><b>${rubric[k].name}</b><strong>${rounded[k]}</strong></div>
-      <p>${rounded[k] >= 72 ? rubric[k].good : rubric[k].weak}</p>
-      <div class="score-track"><i style="width:${rounded[k]}%"></i></div>
+      <div class="score-card-top"><b>${rubric[k].name}</b><strong>${rounded[k] ?? '待确认'}</strong></div>
+      <p>${k === 'accuracy' ? (form === 'uneven' ? '字母分开，但字形或大小不够齐' : form === 'joined' ? '老师确认有粘连' : rounded[k] === null ? '等待老师看纸面确认' : rubric[k].good) : rounded[k] >= 72 ? rubric[k].good : rubric[k].weak}</p>
+      <div class="score-track"><i style="width:${rounded[k] ?? 0}%"></i></div>
     </article>`).join('');
 
   const photoUsable = metrics.mean >= 105 && metrics.mean <= 250 && metrics.sharpnessScore >= 30;
-  const writingPassed = photoUsable && ocr.recognised && ocr.confidence >= 25 && overall >= 70 && rounded.clarity >= 60;
+  const writingPassed = photoUsable && ocr.recognised && ocr.confidence >= 25 && form === 'neat' && overall >= 70 && rounded.clarity >= 60;
   const passed = writingPassed;
   const panel = $('#completion-panel');
   panel.classList.toggle('passed', passed);
-  $('#completion-badge').textContent = passed ? '✓ 通过' : photoUsable ? '尚未通过' : '请重拍';
-  $('#completion-title').textContent = passed ? '本次书写初评通过' : photoUsable ? '请学生再练一练' : '照片不适合评价';
+  $('#completion-badge').textContent = passed ? '✓ 通过' : !photoUsable ? '请重拍' : !form ? '待确认字形' : '尚未通过';
+  $('#completion-title').textContent = passed ? '本次书写初评通过' : !photoUsable ? '照片不适合评价' : !form ? '老师点选字形后给出结论' : '请学生再练一练';
   const reasons = [];
   if (!photoUsable) reasons.push('照片过暗、过曝或模糊，请重拍');
   if (!ocr.recognised) reasons.push('英文内容暂时难以辨认');
   else if (ocr.confidence < 25) reasons.push('部分字母仍需猜读');
-  if (overall < 70) reasons.push(`综合分还需达到 70 分（目前 ${overall} 分）`);
+  if (!form) reasons.push('老师还未确认字形是否端正');
+  if (form === 'uneven') reasons.push('字母虽分开，但字形歪斜或大小不齐');
+  if (form === 'joined') reasons.push('老师确认有字母或笔画粘连');
+  if (overall !== null && overall < 70) reasons.push(`综合分还需达到 70 分（目前 ${overall} 分）`);
   if (rounded.clarity < 60) reasons.push('“看得清”还需达到 60 分');
   $('#completion-detail').textContent = passed
     ? `综合 ${overall} 分，本次练习可以结束。教师请结合学生的纸质作品确认。`
     : !photoUsable
       ? '照片过暗、过曝或模糊，请老师先重拍清楚，再判断学生字迹。'
-      : reasons.slice(0, 3).join('；') + '。请学生按下方建议再练，写完后重新拍照评价。';
+      : !form ? '文字识别只是参考。老师请看纸面，点选上方最符合实际的一项，再决定是否通过。' : reasons.slice(0, 3).join('；') + '。请学生按下方建议再练，写完后重新拍照评价。';
 
-  const lowest = !ocr.recognised ? 'clarity' : keys.reduce((a, b) => rounded[a] <= rounded[b] ? a : b);
-  const [title, text] = priorityCopy(lowest);
+  const lowest = !ocr.recognised ? 'clarity' : form === 'uneven' || form === 'joined' ? 'accuracy' : keys.filter(k => rounded[k] !== null).reduce((a, b) => rounded[a] <= rounded[b] ? a : b);
+  const [title, text] = form === 'uneven'
+    ? ['把每个字母写得更端正', '你的字母已经分开；下一遍重点让同一行的字母高度、形状和倾斜更一致。不用故意把字距拉大。']
+    : form === 'joined'
+      ? ['把相邻字母写清楚', '下一遍放慢一点，检查相邻字母的笔画是否碰在一起，让别人不用猜也能读。']
+      : !form ? ['老师先确认字形', '机器只能判断照片中的英文是否容易识别，不能只凭识别结果断言字形端正或字母粘连。']
+      : priorityCopy(lowest);
   $('#priority-title').textContent = title;
   $('#priority-text').textContent = text;
-  $('#drill-list').innerHTML = drills[lowest].map(x => `<li>${x}</li>`).join('');
+  const selectedDrills = form === 'uneven' ? ['选 2 个写得最歪或大小不齐的字母', '每个慢写 5 次，对齐高度并保持同一倾斜方向', '重新写原来的词或句子 1 遍，重点检查这两个字母'] : form === 'joined' ? drills.clarity : !form ? ['老师看纸面并点选字形状态', '如果字形欠工整，让学生只改最明显的 1 处', '重写后再拍照复评'] : drills[lowest];
+  $('#drill-list').innerHTML = selectedDrills.map(x => `<li>${x}</li>`).join('');
 
   const evidence = [];
   evidence.push({ issue: false, text: metrics.groups.length ? `照片中有四线三格，系统已把它作为书写位置的辅助参考。` : '照片中没有四线三格；本次按字迹本身评价，不影响评分。' });
@@ -392,16 +407,15 @@ function renderResults(scores, metrics, ocr) {
   else if (!photoUsable) evidence.push({ issue: true, text: '照片质量不适合判断字迹，请先重拍。' });
   else if (ocr.available) evidence.push({ issue: true, text: '系统没有稳定读出英文内容，本次暂未通过；请学生把字母写得更清楚。' });
   else evidence.push({ issue: true, text: '识别模块暂不可用，不能据此判断学生字迹。' });
+  evidence.push({ issue: form !== 'neat', text: form === 'neat' ? '老师看过纸面，确认字母分开且字形基本端正。' : form === 'uneven' ? '老师看过纸面：字母分开，但字形歪斜或大小不齐；不是粘连问题。' : form === 'joined' ? '老师看过纸面，确认有字母或笔画粘连。' : '字形尚未由老师确认；系统不会根据 OCR 猜测是否粘连。' });
   $('#evidence-list').innerHTML = evidence.map(e => `<li class="${e.issue ? 'issue' : ''}">${e.text}</li>`).join('');
 
-  const best = keys.reduce((a, b) => rounded[a] >= rounded[b] ? a : b);
-  const like = markerLikes[best];
-  const concern = rounded[lowest] >= 82
-    ? '整体没有明显问题。继续保持考试速度，不要为了追求花体而牺牲清晰度。'
-    : markerConcerns[lowest];
+  const best = ['clarity', 'stability', 'completeness'].reduce((a, b) => rounded[a] >= rounded[b] ? a : b);
+  const like = form === 'uneven' ? '字母是分开的，单词没有因为连笔而糊成一团。' : form === 'neat' ? '字母基本端正、分得清，答案更方便快速阅读。' : markerLikes[best];
+  const concern = form === 'uneven' ? '字形歪斜或大小不齐时，阅卷时仍可能需要多看一眼。' : form === 'joined' ? '相邻字母或笔画粘在一起，可能使拼写被误读。' : !form ? '照片识别不等于书写规范，字形还需要老师看纸面确认。' : rounded[lowest] >= 82 ? '继续保持清楚、端正，不要为了花体牺牲辨认度。' : markerConcerns[lowest];
   $('#marker-like').textContent = like;
   $('#marker-concern').textContent = concern;
-  const comment = `阅卷老师会喜欢：${like} 阅卷老师会担心：${concern} 下一次只改这一点：${text}本次综合评价为“${scoreWord(overall)}”。`;
+  const comment = `阅卷老师会喜欢：${like} 阅卷老师会担心：${concern} 下一次只改这一点：${text}${overall === null ? '字形待老师确认。' : `本次综合评价为“${scoreWord(overall)}”。`}`;
   $('#teacher-comment').textContent = comment;
 
   const problems = photoMessage(metrics);
@@ -412,7 +426,7 @@ function renderResults(scores, metrics, ocr) {
   } else qualityAlert.hidden = true;
 
   $('#results').hidden = false;
-  $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (scroll) $('#results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function runAnalysis() {
@@ -427,8 +441,10 @@ async function runAnalysis() {
       photoStatus.className = 'photo-status warn';
       return;
     }
-    const scores = buildScores(quickMetrics, ocr);
-    renderResults(scores, quickMetrics, ocr);
+    lastOcr = ocr;
+    const form = document.querySelector('input[name="letter-form"]:checked')?.value || null;
+    const scores = buildScores(quickMetrics, ocr, form);
+    renderResults(scores, quickMetrics, ocr, form);
   } catch {
     photoStatus.textContent = '分析没有完成，请换一张更清晰的照片再试。';
     photoStatus.className = 'photo-status warn';
@@ -440,6 +456,11 @@ async function runAnalysis() {
 }
 window.runAnalysis = runAnalysis;
 analyseButton.onclick = runAnalysis;
+$('#form-check').addEventListener('change', () => {
+  if (!lastOcr || !quickMetrics) return;
+  const form = document.querySelector('input[name="letter-form"]:checked')?.value || null;
+  renderResults(buildScores(quickMetrics, lastOcr, form), quickMetrics, lastOcr, form, false);
+});
 
 $('#copy-comment').addEventListener('click', async (e) => {
   try {
@@ -450,7 +471,9 @@ $('#copy-comment').addEventListener('click', async (e) => {
 });
 
 function reset() {
-  currentFile = null; quickMetrics = null;
+  currentFile = null; quickMetrics = null; lastOcr = null;
+  $('#form-check').hidden = true;
+  document.querySelectorAll('input[name="letter-form"]').forEach(input => { input.checked = false; });
   photoInput.value = '';
   if (previewUrl) URL.revokeObjectURL(previewUrl);
   previewUrl = null;
